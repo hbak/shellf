@@ -13,6 +13,7 @@ local executionBlockDelimiters = { '--' }
 local commentStrings = { '#', '//' }
 local postDirectiveStrings = { '$>' }
 local colorizeExCommand = 'BaleiaColorize'
+local shellCmd = '/bin/bash'
 
 local function print(...)
 	local args = {...}
@@ -41,20 +42,12 @@ end
 
 local function shellExecuteWithColor(command, context)
 	local shellfCommandFile = '/tmp/shellf_in.sh'
-	local shellCmd = '/bin/bash'
-	-- local cleanedCommand = command
-	-- cleanedCommand = string.gsub(cleanedCommand, '"', '\\"')
-	-- cleanedCommand = string.gsub(cleanedCommand, "'", "\\'")
-	-- cleanedCommand = string.gsub(cleanedCommand, "\\", "\\\\")
-	--
-
 	local file = assert(io.open(shellfCommandFile, "w"))
 	for k, v in pairs(context) do
 		file:write(string.format("%s=%s\n", k, v))
 	end
 	file:write(command)
 	file:close()
-	-- print('vvvv cleanedCommand', cleanedCommand)
 	local pyscript = string.format([[<<EOF 
 import pexpect
 # (command_output, exitstatus) = pexpect.run('''[percent]s '[percent]s' | xargs echo''', withexitstatus=1)
@@ -125,6 +118,7 @@ local function getExecutionBlock(lineNo, headerBlockEndLine)
 	local function checkDirection(startLineNo, direction)
 		local lineToCheck = startLineNo
 		local boundary
+
 		if direction == 'up' then
 			boundary = headerBlockEndLine - 1
 		else
@@ -156,6 +150,7 @@ local function getExecutionBlock(lineNo, headerBlockEndLine)
 
 	local buffer = vim.fn.bufnr("%")
 	local lines = vim.api.nvim_buf_get_lines(buffer, topBoundary, bottomBoundary, true)
+
 	for _, delim in ipairs(executionBlockDelimiters) do
 		if lines[1] == delim then
 			table.remove(lines, 1)
@@ -176,7 +171,7 @@ local function getExecutionBlock(lineNo, headerBlockEndLine)
 	return lines
 end
 
-local metaCommandInvalidators = { { open='\'', close='\''}, { open='"', close='"' } }
+-- local metaCommandInvalidators = { { open='\'', close='\''}, { open='"', close='"' } }
 
 -- this function is awful.  I think I shouldn't support inline comments
 -- left to right:  find a commentStarter string in the line
@@ -290,15 +285,19 @@ local function parsePostRunDirectives(directivesString, parsedDirectiveAggregato
 	for i=2, #directivesString do
 		-- step one: strip out known bracketable directives
 		for _, directive in ipairs(bracketablePostRunDirectives) do
+			local charBeforeDirective = i - #directive
+
 			if i >= #directive and
-				(i == #directive or directivesString[i - #directive] == directiveDelimiter) and
+				(i == #directive or directivesString:sub(charBeforeDirective, charBeforeDirective) == directiveDelimiter) and
+				-- potential directive under cursor i is first directive of directiveString or comes after a delimiter (space),
+				-- all meaning that cursor i is potentially over the last character of a directive
 				string.sub(directivesString, i - #directive + 1, i) == directive
 			then
 				-- directive begin
 				local startCodeBlockIndex = 0
 				local endCodeBlockIndex = 0
 				local modifier = ''
-				local directiveEndIndex = 0
+				local directiveEndIndex = i+1
 				for j=i+1, #directivesString do
 					if directivesString:sub(j, j) == directiveDelimiter then
 						directiveEndIndex = j - 1
@@ -326,7 +325,6 @@ local function parsePostRunDirectives(directivesString, parsedDirectiveAggregato
 				end
 
 				parsedDirectiveAggregator[#parsedDirectiveAggregator + 1] = parsedDirective
-				vim.pretty_print(parsedDirectiveAggregator)
 
 				local preDirective = string.sub(directivesString, 1, i - #directive)
 				local postDirective = string.sub(directivesString, directiveEndIndex + 1, #directivesString)
@@ -334,18 +332,17 @@ local function parsePostRunDirectives(directivesString, parsedDirectiveAggregato
 				return parsePostRunDirectives(directivesStringWithBracketedDirectiveRemoved, parsedDirectiveAggregator)
 			end
 		end
-		-- at this point all bracketed directives are parsed out
-		local singletonDirectivePossibilities = string.split(directivesString, directiveDelimiter)
-		for _, possibleDirective in ipairs(singletonDirectivePossibilities) do
-			for _, directive in ipairs(singletonDirectives) do
-				if string.sub(possibleDirective, 1, #directive) == directive then
-					local parsedDirective = { directive=#directive }
-
-					if #possibleDirective > #directive then
-						parsedDirective.modifier = string.sub(possibleDirective, #directive + 1)
-					end
-					parsedDirectiveAggregator[#parsedDirectiveAggregator + 1] = parsedDirective
+	end
+	-- at this point all bracketed directives are parsed out
+	local singletonDirectivePossibilities = string.split(directivesString, directiveDelimiter)
+	for _, possibleDirective in ipairs(singletonDirectivePossibilities) do
+		for _, directive in ipairs(singletonDirectives) do
+			if string.sub(possibleDirective, 1, #directive) == directive then
+				local parsedDirective = { directive=directive }
+				if #possibleDirective > #directive then
+					parsedDirective.modifier = string.sub(possibleDirective, #directive + 1)
 				end
+				parsedDirectiveAggregator[#parsedDirectiveAggregator + 1] = parsedDirective
 			end
 		end
 	end
@@ -392,17 +389,18 @@ local function handlePostRunDirectives(commandObj, priorViewState)
 
 			vim.api.nvim_win_set_buf(newWin, newBuf)
 			local pyOutputLines = string.split(commandObj.output, '\n')
-			-- vim.api.nvim_buf_set_lines(ShellfOutputBuf, 0, 0, true, pyOutputLines)
 			vim.api.nvim_buf_set_lines(newBuf, 0, 0, true, pyOutputLines)
 
-			-- vim.fn.win_execute(ShellfOutputSplitHandle, colorizeExCommand)
 			vim.fn.win_execute(newWin, colorizeExCommand)
 			if postRunDirective.codeBlock ~= nil then
-				vim.fn.win_execute(newWin, 'lua '..postRunDirective.codeBlock)
+				local ok, stuff = pcall(vim.fn.win_execute, newWin, 'lua '..postRunDirective.codeBlock)
+				if not ok then
+					vim.api.nvim_buf_set_lines(newBuf, 0, 0, true, {'there was an error in this code block:', postRunDirective.codeBlock, ' ', stuff, ' '})
+				end
 			end
-		elseif postRunDirective[1] == '@' and #postRunDirective > 1 then
+		elseif postRunDirective.directive == '@' then
 			-- TODO: steal the code from Baleia and strip out term color codes
-			vim.api.setreg(postRunDirective[2], commandObj.output)
+			vim.fn.setreg(postRunDirective.modifier, commandObj.output)
 		else
 			print('unknown post run directive: ', postRunDirective)
 		end
@@ -420,6 +418,14 @@ local viewState = {}
 function Shellf()
 	local headerBlockInfo = getHeaderBlock()
 	local context = processHeaderLinesToContextTable(table.slice(headerBlockInfo.lines, 1, #headerBlockInfo.lines -1))
+	local defaultContext = { PAGER='cat' }
+	for k, v in pairs(defaultContext) do
+		if context[k] == nil then
+			context[k] = v
+		end
+	end
+
+
 	local executionBlock = getExecutionBlock(nil, headerBlockInfo.lastLine)
 	-- TODO: 
 	-- 1.  separate lines (that don't end with \) into separate commands, execute them separately, (or && join them?)  and join the results
