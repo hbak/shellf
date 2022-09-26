@@ -1,10 +1,16 @@
 -- TODO
--- HEADER BLOCK
--- - in-line and block comments
---   - block comments might be tricky
+-- - header block:
+--   - in-line and block comments
+--     - block comments might be tricky
+--   - vim operator
 -- - shellExecuteWithColor()'s python script should return byte codes, there shouldn't be any string substitutions
--- you may need to implement some kind of parser.   comments and $> could be inside quotes.
---	and what about if you have $json(\n...) as a param?  then you need to join until it's closed, making sure the closer isn't enclosed in quotes
+-- - multiline:
+--   - shell commands (use backslash?)
+--   - postRunDirectives
+--   - block comments
+--   - postRunFunctionBody
+--   - you may need to implement some kind of parser.   comments and $> could be inside quotes, invalidating them
+--   - header lua/vim functions
 
 
 local thisPluginName = 'Shellf'

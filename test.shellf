@@ -1,0 +1,10 @@
+var1 lua print('hi'); return 'blah';
+var2 vim echom hi
+var3 = $value
+--
+-- blah
+echo $var1 $> vs{print('hi'); vim.bo.ft='hi'; return 'blah';}
+
+--
+echo $var3 $> whatever
+--

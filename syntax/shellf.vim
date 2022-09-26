@@ -1,5 +1,13 @@
 " isn't working:
-"  - syn keyword shellfControl $> (it had been working since the beginning)
+"  - syn keyword shellfControl $> (it had been working at the start of
+"  development), 
+"
+" stretch goals:
+"  - multiline *anything*:
+"	- comments
+"	- postRunDirectives
+"	- postRunFunctionBody
+"	- header block lua/vim functions
 "
 " ~/.local/share/nvim/site/pack/hahnpack/start/vim-rest-console/syntax/rest.vim
 "
@@ -40,6 +48,7 @@ syn match headerSetterEqualsLine /[[:alnum:]-_]\+ = .\+$/ contained contains=hea
 " syn region headerSetterEquals start=/ =/ end=/= .\+$'/me=s-2,hs=s,he=s+1 contained containedin=headerSetterEqualsLine keepend
 " - can't get region headerSetterEquals to work -- the \"region\" extends past the equals no matter how i set re=,me=,he=
 
+
 syn region headerSetterEquals start=/ =/ end=/= .\+$/ contained containedin=headerSetterEqualsLine contains=headerSetterEqualsRhs keepend
 syn match headerSetterEqualsRhs / = .\+$/ms=s+3 contained containedin=headerSetterEquals contains=@SH keepend
  
@@ -50,25 +59,31 @@ syn match headerLuaRhs '.\+$' contains=@LUA keepend contained
 syn match headerVimRhs '.\+$' contains=@VIMSCRIPT keepend contained
 
 
-syn region executionBlock start=/--.*$/ end=/\n--/me=s+1,re=s+1,he=s+1 contains=executionLine,postProcessDirectives,executionBlockAnnotation,shellfControl fold keepend
+syn region executionBlock start=/--.*$/ end=/\n--/me=s+1,re=s+1,he=s+1 contains=executionLine,postRunDirectives,executionBlockAnnotation,shellfControl fold keepend
 " syn region executionBlockAnnotation start=/--[^\n]*/hs=s+2 end='$' containedin=executionBlock 
 syn region executionLine start=/^/ end=/\$>/re=s-1,me=s-1 contains=@SH keepend contained
+
+" an "execution block annotation" is any text that occurs on an execution
+" block delimiter (--), and basically just means it's a comment
 syn region executionBlockAnnotation start=/--/rs=s+2,hs=s+2 end='$' contained containedin=executionBlock keepend
-syn region postProcessDirectives start=/\$>/ end="$" contains=postProcessFunctionBody
-syn region postProcessFunctionBody start="{"hs=e+1 end="}"he=s-1 contained contains=@LUA keepend
+
+syn region postRunDirectives start=/\$>/ end="$" contains=postRunFunctionBody
+syn region postRunFunctionBody start="{"hs=e+1 end="}"he=s-1 contained contains=@LUA keepend
+
+" I don't know when shellfControl as a standalone keyword stopped working
+" and shellfComment doesn't have precedence over
+" postRunDirectives/postRunFunctionBody
+" I thought if they're latest in the file they should have precedence...?
 syn keyword shellfControl $>
-
 syn region shellfComment start="#" end=/$/
-" I don't know when shellfControl stopped working
-
 
 
 hi def link headerBlock            Variable
 hi def link headerSetterEqualsLine Variable
-hi def link shellfControl         Comment
-hi def link shellfComment         Comment
+hi def link shellfControl          Comment
+hi def link shellfComment          Comment
 hi def link executionBlockAnnotation shellfComment
-hi def link postProcessDirectives  Special
+hi def link postRunDirectives      Special
 hi def link headerRhs              Normal
 hi def link headerSetterLua        LineNr
 hi def link headerSetterVim        LineNr
