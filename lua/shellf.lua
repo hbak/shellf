@@ -63,7 +63,7 @@ print(command_output)
 ]], shellCmd, shellfCommandFile)
 	local pyOutput = vim.api.nvim_exec('py3 ' .. pyscript, true)
 	local transformedOutput = string.sub(pyOutput, 3, #pyOutput - 1)
-	local gsubTransformations = { ["\\x1b"]='', ["\\r\\n"]= '\n', ["\\r"]='', ["\\n"]='\n' }
+	local gsubTransformations = { ["\\x1b"]='', ["\\r\\n"]= '\n', ["\\r"]='', ["\\n"]='\n', ["\\t"]='\t' }
 	for k, v in pairs(gsubTransformations) do
 		transformedOutput = string.gsub(transformedOutput, k, v)
 	end
